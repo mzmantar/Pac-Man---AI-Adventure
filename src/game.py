@@ -39,10 +39,16 @@ class Game:
         pacman = Pacman(maze, start_pos=(13, 23))
         ghosts = [
             Ghost(maze, "Blinky", (13, 11), settings.GHOST_RED, (25, 1)),
-            Ghost(maze, "Inky", (14, 14), settings.GHOST_TEAL, (2, 1)),
-            Ghost(maze, "Pinky", (12, 14), settings.GHOST_PINK, (1, 29)),
-            Ghost(maze, "Clyde", (15, 14), settings.GHOST_ORANGE, (26, 29)),
+            Ghost(maze, "Inky", (11, 11), settings.GHOST_TEAL, (2, 1)),
+            Ghost(maze, "Pinky", (15, 11), settings.GHOST_PINK, (1, 29)),
+            Ghost(maze, "Clyde", (13, 16), settings.GHOST_ORANGE, (26, 29)),
         ]
+        
+        # Initialize ghost directions
+        ghosts[0].direction = pygame.math.Vector2(-1, 0)  # Blinky left
+        ghosts[1].direction = pygame.math.Vector2(1, 0)   # Inky right
+        ghosts[2].direction = pygame.math.Vector2(-1, 0)  # Pinky left
+        ghosts[3].direction = pygame.math.Vector2(0, 1)   # Clyde down
 
         font = pygame.font.SysFont("arialroundedmtbold", 26)
         game = cls(screen, clock, maze, pacman, ghosts, font=font)
@@ -62,15 +68,24 @@ class Game:
         )
         self.pacman.direction = pygame.math.Vector2(0, 0)
 
-        ghost_positions = [(13, 11), (14, 14), (12, 14), (15, 14)]
-        for ghost, pos in zip(self.ghosts, ghost_positions):
+        ghost_positions = [(13, 11), (11, 11), (15, 11), (13, 16)]
+        ghost_directions = [
+            pygame.math.Vector2(-1, 0),  # Blinky left
+            pygame.math.Vector2(1, 0),   # Inky right
+            pygame.math.Vector2(-1, 0),  # Pinky left
+            pygame.math.Vector2(0, 1)    # Clyde down
+        ]
+        for ghost, pos, direction in zip(self.ghosts, ghost_positions, ghost_directions):
             ghost.grid_pos = pygame.math.Vector2(pos)
             ghost.pixel_pos = pygame.math.Vector2(
                 ghost.grid_pos.x * settings.TILE_SIZE + settings.TILE_SIZE / 2,
                 ghost.grid_pos.y * settings.TILE_SIZE + settings.TILE_SIZE / 2,
             )
-            ghost.direction = pygame.math.Vector2(-1, 0)
+            ghost.direction = direction
             ghost.set_mode(GhostMode.SCATTER)
+            # Reset escape mode counters
+            ghost.stuck_counter = 0
+            ghost.escape_mode = False
         self.pacman.enable_autopilot(False)
         if self.auto_replan:
             self.compute_autopilot_path()
@@ -125,7 +140,9 @@ class Game:
             self.compute_autopilot_path()
         self.pacman.update(dt)
         for ghost in self.ghosts:
-            ghost.update(dt, self.pacman, self.scatter_timer, self.ghosts)
+            # Skip updating permanently eaten ghosts
+            if not ghost.permanently_eaten:
+                ghost.update(dt, self.pacman, self.scatter_timer, self.ghosts)
 
         if self.pacman.is_at_center():
             tile_value = self.maze.consume_tile(
@@ -150,6 +167,10 @@ class Game:
             settings.TILE_SIZE,
         )
         for ghost in self.ghosts:
+            # Skip permanently eaten ghosts
+            if ghost.permanently_eaten:
+                continue
+                
             ghost_rect = pygame.Rect(
                 ghost.pixel_pos.x - settings.TILE_SIZE / 2,
                 ghost.pixel_pos.y - settings.TILE_SIZE / 2,
@@ -158,10 +179,18 @@ class Game:
             )
             if pac_rect.colliderect(ghost_rect):
                 if ghost.mode == GhostMode.FRIGHTENED:
-                    ghost.set_mode(GhostMode.EATEN)
+                    ghost.permanently_eaten = True  # Marquer comme définitivement mangé
                     self.score += 200
+                    # Vérifier si tous les fantômes sont mangés
+                    if all(g.permanently_eaten for g in self.ghosts):
+                        self.show_winner()
+                        self.running = False
                 elif ghost.mode != GhostMode.EATEN:
                     self.reset_positions(lost_life=True)
+        
+        # Régénérer les points si tous mangés mais des fantômes restent
+        if not self.maze.remaining_pellets() and any(not g.permanently_eaten for g in self.ghosts):
+            self.regenerate_pellets()
 
     def draw(self) -> None:
         self.draw_background()
@@ -216,6 +245,47 @@ class Game:
             pygame.draw.circle(
                 self.screen, settings.AMBER, (x, y), settings.TILE_SIZE // 2 - 3
             )
+
+    def regenerate_pellets(self) -> None:
+        """Regenerate all pellets when all are eaten but ghosts remain."""
+        for y, row in enumerate(self.maze.grid):
+            for x, value in enumerate(row):
+                if value == " ":
+                    self.maze.grid[y][x] = "."
+    
+    def show_winner(self) -> None:
+        """Display winner screen when all ghosts are eaten."""
+        overlay = pygame.Surface((settings.SCREEN_WIDTH, settings.SCREEN_HEIGHT))
+        overlay.set_alpha(200)
+        overlay.fill(settings.BLACK)
+        self.screen.blit(overlay, (0, 0))
+        
+        if self.font:
+            # Winner title
+            title_font = pygame.font.SysFont("arialroundedmtbold", 72)
+            title = title_font.render("WINNER!", True, settings.AMBER)
+            title_rect = title.get_rect(center=(settings.SCREEN_WIDTH / 2, settings.SCREEN_HEIGHT / 2 - 60))
+            self.screen.blit(title, title_rect)
+            
+            # Score
+            score_text = self.font.render(f"Score Final: {self.score}", True, settings.WHITE)
+            score_rect = score_text.get_rect(center=(settings.SCREEN_WIDTH / 2, settings.SCREEN_HEIGHT / 2 + 20))
+            self.screen.blit(score_text, score_rect)
+            
+            # Instructions
+            instruction = self.font.render("Appuyez sur Echap pour quitter", True, settings.SKY_BLUE)
+            instruction_rect = instruction.get_rect(center=(settings.SCREEN_WIDTH / 2, settings.SCREEN_HEIGHT / 2 + 80))
+            self.screen.blit(instruction, instruction_rect)
+        
+        pygame.display.flip()
+        waiting = True
+        while waiting:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    waiting = False
+                    return
+                if event.type == pygame.KEYDOWN and event.key in (pygame.K_ESCAPE, pygame.K_RETURN):
+                    waiting = False
 
     def show_game_over(self) -> None:
         overlay = pygame.Surface((settings.SCREEN_WIDTH, settings.SCREEN_HEIGHT))
