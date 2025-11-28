@@ -265,6 +265,11 @@ class Ghost(Entity):
         self.start_pos = Vector2(start_pos)  # Position de départ
         self.stuck_counter = 0  # Compteur pour détecter le blocage
         self.escape_mode = False  # Mode d'échappement
+        # Pathfinding / replanning helpers
+        self.path: Deque[Tuple[int, int]] = deque()
+        self.last_target: Tuple[int, int] | None = None
+        self.replan_cooldown: float = 0.0
+        self.replan_interval: float = 0.5  # seconds between A* replans
 
     def set_mode(self, mode: GhostMode) -> None:
         if mode == GhostMode.FRIGHTENED:
@@ -313,6 +318,34 @@ class Ghost(Entity):
             behaviour, target = ai_decide_mode(context)
             self.behaviour = behaviour
 
+        # Specialised targeting for named ghosts (simple personalities)
+        # Pinky aims ahead of Pac-Man, Blinky targets Pac-Man directly,
+        # Inky uses a simple ambush combining Blinky and Pac-Man, Clyde mixes.
+        if self.mode not in (GhostMode.FRIGHTENED, GhostMode.EATEN):
+            try:
+                if self.name.lower().startswith("pinky"):
+                    target = pacman.grid_pos + pacman.direction * 4
+                elif self.name.lower().startswith("inky"):
+                    # Ambush: midpoint between Blinky (ghosts[0]) and two-tiles ahead of Pac-Man
+                    blinky = next((g for g in ghosts if g.name.lower().startswith("blinky")), None)
+                    ahead = pacman.grid_pos + pacman.direction * 2
+                    if blinky:
+                        target = (blinky.grid_pos + ahead) / 2
+                    else:
+                        target = ahead
+                elif self.name.lower().startswith("clyde"):
+                    # If far from Pac-Man pursue, else scatter
+                    if (self.grid_pos - pacman.grid_pos).length() > 8:
+                        target = pacman.grid_pos
+                    else:
+                        target = self.home_corner
+                else:
+                    # default (e.g., Blinky) follows Pac-Man
+                    target = pacman.grid_pos
+            except Exception:
+                # Fallback to previously computed target on error
+                pass
+
         # Detect if stuck at start position
         distance_from_start = (self.grid_pos - self.start_pos).length()
         if distance_from_start < 2.0 and not self.escape_mode:
@@ -328,6 +361,13 @@ class Ghost(Entity):
         if self.is_at_center():
             possible = self.available_directions()
             
+            # Replanning cooldown
+            self.replan_cooldown -= dt
+            should_replan = False
+            target_tuple = (int(target.x), int(target.y))
+            if self.replan_cooldown <= 0.0 or not self.path or self.last_target != target_tuple:
+                should_replan = True
+                self.replan_cooldown = self.replan_interval
             # In escape mode, allow moving through walls temporarily
             if self.escape_mode and not possible:
                 # Force movement in all cardinal directions
@@ -358,22 +398,67 @@ class Ghost(Entity):
                                 best_dir = direction
                         self.direction = best_dir
                 else:
-                    # Normal mode: mostly greedy, sometimes random
-                    use_random = random.random() < 0.2  # 20% random
-                    
-                    if use_random:
-                        self.direction = random.choice(possible)
-                    else:
-                        # Greedy: choose direction closest to target
-                        best_dir = possible[0]
-                        best_distance = float("inf")
-                        for direction in possible:
-                            next_pos = portal_adjust(self.grid_pos + direction)
-                            distance = (next_pos - target).length_squared()
-                            if distance < best_distance:
-                                best_distance = distance
-                                best_dir = direction
-                        self.direction = best_dir
+                    # Normal mode: prefer pathfinding; fallback to greedy/random
+                    path_used = False
+                    if should_replan:
+                        try:
+                            path_list = ai_compute_path(context, target)
+                            # store path as deque of grid positions
+                            if path_list:
+                                self.path = deque(path_list)
+                                self.last_target = target_tuple
+                            else:
+                                self.path.clear()
+                                self.last_target = None
+                        except Exception:
+                            self.path.clear()
+                            self.last_target = None
+
+                    # If we have a planned path, follow the next step
+                    if self.path:
+                        # Ensure path[0] is current position; if not, drop until it matches
+                        while len(self.path) and tuple(self.path[0]) != (int(self.grid_pos.x), int(self.grid_pos.y)):
+                            self.path.popleft()
+                        if len(self.path) >= 2:
+                            curr = self.path[0]
+                            nxt = self.path[1]
+                            dx = nxt[0] - curr[0]
+                            dy = nxt[1] - curr[1]
+                            # Normalize (handle wraparounds)
+                            if dx > 1:
+                                dx = -1
+                            elif dx < -1:
+                                dx = 1
+                            if dy > 1:
+                                dy = -1
+                            elif dy < -1:
+                                dy = 1
+                            desired = Vector2(dx, dy)
+                            # If desired direction is available, use it
+                            if any((desired == d) for d in possible):
+                                self.direction = desired
+                                path_used = True
+                            else:
+                                # cannot follow planned path; drop it to force replanning next tick
+                                self.path.clear()
+                                self.last_target = None
+
+                    if not path_used:
+                        # fallback: mostly greedy, sometimes random
+                        use_random = random.random() < 0.2  # 20% random
+                        if use_random:
+                            self.direction = random.choice(possible)
+                        else:
+                            # Greedy: choose direction closest to target
+                            best_dir = possible[0]
+                            best_distance = float("inf")
+                            for direction in possible:
+                                next_pos = portal_adjust(self.grid_pos + direction)
+                                distance = (next_pos - target).length_squared()
+                                if distance < best_distance:
+                                    best_distance = distance
+                                    best_dir = direction
+                            self.direction = best_dir
 
         # Update speed and position
         speed = (
