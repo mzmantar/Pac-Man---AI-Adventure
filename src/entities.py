@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum, auto
@@ -49,6 +50,7 @@ def valid_tile(maze, grid_pos: Vector2) -> bool:
     x, y = int(grid_pos.x), int(grid_pos.y)
     if x < 0 or y < 0 or y >= len(maze.grid) or x >= len(maze.grid[0]):
         return False
+    # Allow ghosts to move through G (ghost house) and any non-wall tile
     return maze.grid[y][x] not in {"X"}
 
 
@@ -244,7 +246,7 @@ class Pacman(Entity):
 class Ghost(Entity):
     def __init__(
         self,
-        maze: "maze.Maze",
+        maze: "Maze",
         name: str,
         start_pos: Tuple[int, int],
         colour: Tuple[int, int, int],
@@ -259,6 +261,10 @@ class Ghost(Entity):
         self.eye_colour = settings.WHITE
         self.direction = DIRECTIONS["left"]
         self.behaviour = "patrouille"
+        self.permanently_eaten = False  # Flag pour fantômes définitivement mangés
+        self.start_pos = Vector2(start_pos)  # Position de départ
+        self.stuck_counter = 0  # Compteur pour détecter le blocage
+        self.escape_mode = False  # Mode d'échappement
 
     def set_mode(self, mode: GhostMode) -> None:
         if mode == GhostMode.FRIGHTENED:
@@ -272,22 +278,31 @@ class Ghost(Entity):
         scatter_timer: float,
         ghosts: List["Ghost"],
     ) -> None:
+        # Update frightened timer
         if self.mode == GhostMode.FRIGHTENED:
             self.frightened_timer -= dt
             if self.frightened_timer <= 0:
                 self.mode = GhostMode.CHASE
 
+        # Check if EATEN ghost reached home
         if self.mode == GhostMode.EATEN:
-            target_tile = Vector2(13, 11)
-            context = observe_ghost_state(
-                self.maze,
-                pacman.grid_pos,
-                self.grid_pos,
-                self.home_corner,
-                ghosts,
+            home_pos = Vector2(13, 11)
+            distance_to_home = (self.grid_pos - home_pos).length()
+            if distance_to_home < 1.0:
+                self.mode = GhostMode.CHASE
+                self.direction = DIRECTIONS["left"]
+
+        # Determine target based on mode
+        if self.mode == GhostMode.EATEN:
+            target = Vector2(13, 11)
+        elif self.mode == GhostMode.FRIGHTENED:
+            # Run away from Pac-Man
+            target = Vector2(
+                settings.GRID_WIDTH - pacman.grid_pos.x,
+                settings.GRID_HEIGHT - pacman.grid_pos.y,
             )
-            path = ai_compute_path(context, target_tile)
         else:
+            # Use AI to decide target
             context = observe_ghost_state(
                 self.maze,
                 pacman.grid_pos,
@@ -295,52 +310,72 @@ class Ghost(Entity):
                 self.home_corner,
                 ghosts,
             )
-            behaviour, target_tile = ai_decide_mode(context)
+            behaviour, target = ai_decide_mode(context)
             self.behaviour = behaviour
-            path = ai_compute_path(context, target_tile)
 
-        if path and len(path) >= 2:
-            next_step = Vector2(path[1])
-            direction = Vector2(
-                next_step.x - self.grid_pos.x, next_step.y - self.grid_pos.y
-            )
-            if direction.length_squared():
-                self.direction = direction.normalize()
-        else:
-            # fall back to deterministic choice if path is unavailable
-            target = self.choose_target(pacman, scatter_timer)
-            self.move_towards(target, dt)
-            return
+        # Detect if stuck at start position
+        distance_from_start = (self.grid_pos - self.start_pos).length()
+        if distance_from_start < 2.0 and not self.escape_mode:
+            self.stuck_counter += dt
+            if self.stuck_counter > 2.0:  # Stuck for 2 seconds
+                self.escape_mode = True
+                self.stuck_counter = 0
+        elif distance_from_start > 5.0:
+            self.escape_mode = False
+            self.stuck_counter = 0
+        
+        # Only change direction at intersections
+        if self.is_at_center():
+            possible = self.available_directions()
+            
+            # In escape mode, allow moving through walls temporarily
+            if self.escape_mode and not possible:
+                # Force movement in all cardinal directions
+                possible = [DIRECTIONS["up"], DIRECTIONS["down"], 
+                           DIRECTIONS["left"], DIRECTIONS["right"]]
+            
+            if not possible:
+                # Stuck - reverse direction
+                self.direction *= -1
+            elif len(possible) == 1:
+                # Only one way - take it
+                self.direction = possible[0]
+            else:
+                # Multiple choices - decide based on mode
+                if self.mode == GhostMode.FRIGHTENED:
+                    # 70% random when frightened, 30% away from pacman
+                    if random.random() < 0.7:
+                        self.direction = random.choice(possible)
+                    else:
+                        # Choose direction away from Pac-Man
+                        best_dir = possible[0]
+                        best_distance = -1.0
+                        for direction in possible:
+                            next_pos = portal_adjust(self.grid_pos + direction)
+                            distance = (next_pos - pacman.grid_pos).length_squared()
+                            if distance > best_distance:
+                                best_distance = distance
+                                best_dir = direction
+                        self.direction = best_dir
+                else:
+                    # Normal mode: mostly greedy, sometimes random
+                    use_random = random.random() < 0.2  # 20% random
+                    
+                    if use_random:
+                        self.direction = random.choice(possible)
+                    else:
+                        # Greedy: choose direction closest to target
+                        best_dir = possible[0]
+                        best_distance = float("inf")
+                        for direction in possible:
+                            next_pos = portal_adjust(self.grid_pos + direction)
+                            distance = (next_pos - target).length_squared()
+                            if distance < best_distance:
+                                best_distance = distance
+                                best_dir = direction
+                        self.direction = best_dir
 
-        speed = (
-            settings.FRIGHTENED_SPEED
-            if self.mode == GhostMode.FRIGHTENED
-            else settings.GHOST_SPEED
-        )
-        self.speed = speed
-        self.update_position(dt)
-
-    def move_towards(self, target: Vector2, dt: float) -> None:
-        if self.mode == GhostMode.EATEN and self.is_at_center() and self.grid_pos == Vector2(
-            13, 11
-        ):
-            self.mode = GhostMode.CHASE
-            self.direction = DIRECTIONS["left"]
-            return
-
-        possible = self.available_directions()
-        if not possible:
-            self.direction *= -1
-        else:
-            best_dir = possible[0]
-            best_distance = float("inf")
-            for direction in possible:
-                next_pos = portal_adjust(self.grid_pos + direction)
-                distance = (next_pos - target).length_squared()
-                if distance < best_distance:
-                    best_distance = distance
-                    best_dir = direction
-            self.direction = best_dir
+        # Update speed and position
         speed = (
             settings.FRIGHTENED_SPEED
             if self.mode == GhostMode.FRIGHTENED
@@ -366,6 +401,10 @@ class Ghost(Entity):
         return pacman.grid_pos
 
     def draw(self, surface: pygame.Surface) -> None:
+        # Don't draw permanently eaten ghosts
+        if self.permanently_eaten:
+            return
+        
         body = pygame.Surface((settings.TILE_SIZE, settings.TILE_SIZE), pygame.SRCALPHA)
         radius = settings.TILE_SIZE // 2 - 2
         rect = body.get_rect()
