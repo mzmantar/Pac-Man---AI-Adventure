@@ -4,11 +4,24 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![Pygame](https://img.shields.io/badge/pygame-2.6.1-green.svg)](https://www.pygame.org/)
+[![PyTorch](https://img.shields.io/badge/pytorch-2.x-red.svg)](https://pytorch.org/)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
 
-*Un clone moderne de Pac-Man avec intelligence artificielle avancée*
+*Un clone moderne de Pac-Man avec intelligence artificielle avancée et apprentissage par renforcement*
 
-[Fonctionnalités](#-fonctionnalités) • [Installation](#-installation) • [Utilisation](#-utilisation) • [Architecture](#-architecture) • [Contrôles](#-contrôles)
+[Fonctionnalités](#-fonctionnalités) • [Installation](#-installation) • [Utilisation](#-utilisation) • [Architecture](#-architecture) • [Technologies](#-technologies)
+
+</div>
+
+---
+
+## 🖼️ Aperçu
+
+<div align="center">
+
+<img src="cap/1.png" alt="Gameplay" width="250" style="margin: 5px;"/>
+<img src="cap/2.png" alt="Labyrinthe dynamique" width="250" style="margin: 5px;"/>
+<img src="cap/3.png" alt="Entraînement RL" width="250" style="margin: 5px;"/>
 
 </div>
 
@@ -16,15 +29,12 @@
 
 ## 📋 Description
 
-**Pac-Man AI Adventure** est une implémentation professionnelle du jeu classique Pac-Man, développée en Python avec Pygame. Ce projet se distingue par son système d'intelligence artificielle sophistiqué utilisant l'algorithme A* pour la navigation autonome des fantômes et du joueur.
+**Pac-Man AI Adventure** est une implémentation professionnelle du jeu classique Pac-Man en Python avec Pygame. Le projet combine :
 
-### 🎯 Objectifs du Projet
-
-- Créer une version fidèle du jeu Pac-Man original
-- Implémenter des comportements intelligents pour les fantômes
-- Offrir un mode autopilote basé sur l'IA pour Pac-Man
-- Démontrer l'utilisation de l'algorithme A* dans un jeu vidéo
-- Fournir une architecture de code modulaire et maintenable
+- **Pathfinding A* (heuristique Manhattan)** intelligent pour les fantômes et Pac-Man
+- **Labyrinthe dynamique** avec murs mobiles (motifs vague, spirale, aléatoire)
+- **Difficulté adaptative** qui s'ajuste selon les performances du joueur
+- **Module Reinforcement Learning complet** (PyTorch + Gymnasium) pour entraîner Pac-Man ou les fantômes
 
 ---
 
@@ -32,14 +42,24 @@
 
 ### 🤖 Intelligence Artificielle
 
-- **Algorithme A*** : Pathfinding optimisé pour la navigation sur grille
-- **Comportements multiples** des fantômes :
-  - 🔴 **Scatter** : Patrouille des zones
-  - 🎯 **Chase** : Poursuite agressive de Pac-Man
-  - 💙 **Frightened** : Fuite aléatoire (mode vulnérable)
-  - 👻 **Eaten** : Retour au spawn après capture
-- **Autopilote intelligent** : Pac-Man peut naviguer automatiquement vers un objectif
-- **Replanification dynamique** : Adaptation en temps réel aux changements du jeu
+- **Algorithme A* (heuristique Manhattan)** : Pathfinding optimisé pour grilles de jeu avec cache de chemins
+- **4 fantômes avec comportements distincts** :
+  - 🔴 Blinky (Rouge) : Agressif et direct
+  - 🩷 Pinky (Rose) : Embuscades stratégiques
+  - 💙 Inky (Cyan) : Comportement imprévisible
+  - 🧡 Clyde (Orange) : Timide mais rusé
+- **Modes multiples** : Scatter, Chase, Frightened, Eaten
+- **Autopilote Pac-Man** : Navigation automatique vers une destination
+- **Replanification en temps réel** lors de changements du labyrinthe
+
+### 🧠 Module Reinforcement Learning
+
+- **Agents DQN** (PyTorch) pour Pac-Man et fantômes
+- **Environnement Gymnasium** avec observations complètes et récompenses intelligentes
+- **Labyrinthe dynamique** complexifiant l'apprentissage
+- **Difficulté adaptative** ajustant la vitesse/intelligence selon les performances
+- **TensorBoard** pour visualiser les métriques d'entraînement
+- **Sauvegarde/chargement** de modèles en `.pt`
 
 ### 🎨 Interface & Graphismes
 
@@ -56,7 +76,7 @@
 - Régénération automatique des pellets
 - Condition de victoire : manger tous les fantômes
 - Score et statistiques en temps réel
-- Mode "power pellet" pour manger les fantômes
+- Mode "power pellet" pour vulnérabiliser les fantômes
 
 ---
 
@@ -64,70 +84,94 @@
 
 ### Prérequis
 
-- **Python 3.10+** (Python 3.11.0 recommandé)
-- **pip** (gestionnaire de paquets Python)
-- **Windows** PowerShell (ou terminal compatible)
+- **Python 3.10+** (3.11.0 recommandé)
+- **pip** (gestionnaire de paquets)
+- **PyTorch** (installé automatiquement via `requirements.txt`)
+- **Windows PowerShell** ou terminal compatible
 
-### Étapes d'Installation
+### Étapes Installation
 
-1. **Cloner le dépôt**
-   ```powershell
-   git clone https://github.com/mzmantar/Pac-Man---AI-Adventure.git
-   cd Pac-Man---AI-Adventure
-   ```
+```powershell
+# 1. Cloner le dépôt
+git clone https://github.com/mzmantar/Pac-Man---AI-Adventure.git
+cd Pac-Man---AI-Adventure
 
-2. **Créer l'environnement virtuel**
-   ```powershell
-   python -m venv .venv
-   ```
+# 2. Créer environnement virtuel
+python -m venv .venv
 
-3. **Activer l'environnement virtuel**
-   ```powershell
-   .\.venv\Scripts\Activate.ps1
-   ```
-   
-   *Note : Si vous rencontrez une erreur de politique d'exécution, exécutez :*
-   ```powershell
-   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-   ```
+# 3. Activer l'environnement virtuel
+.\.venv\Scripts\Activate.ps1
 
-4. **Installer les dépendances**
-   ```powershell
-   pip install -r requirements.txt
-   ```
+# Si erreur de politique d'exécution :
+# Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+# 4. Installer les dépendances
+pip install -r requirements.txt
+```
 
 ---
 
 ## 🎯 Utilisation
 
-### Lancer le Jeu
+### 🕹️ Lancer le Jeu
 
 ```powershell
 python main.py
 ```
 
-### 🕹️ Contrôles
-
-#### Navigation du Menu
-- **↑/↓** : Naviguer entre les options
-- **ENTRÉE** : Sélectionner une option
-- **ÉCHAP** : Quitter le jeu
-
 #### Contrôles en Jeu
 
 | Touche | Action |
 |--------|--------|
-| **←→↑↓** | Déplacer Pac-Man manuellement |
-| **C** | Activer/Désactiver l'autopilote IA |
-| **Clic gauche** | Définir une destination (calcul automatique du chemin) |
+| **←→↑↓** | Déplacer Pac-Man |
+| **C** | Activer/Désactiver autopilote IA |
+| **Clic gauche** | Définir destination (A* automatique) |
 | **ÉCHAP** | Pause / Retour au menu |
 
 #### Objectifs
 
-- 🎯 **Objectif principal** : Mangez TOUS les fantômes pour gagner !
-- 🔵 **Power Pellets** : Les gros points rendent les fantômes vulnérables (bleus)
-- ⭐ **Points** : Fantômes bleus = +200 points
-- ♻️ **Régénération** : Les pellets se régénèrent automatiquement
+- 🎯 Manger **TOUS** les fantômes pour gagner
+- 🔵 Power Pellets rendent les fantômes vulnérables (bleus)
+- ⭐ Fantôme mangé = +200 points
+- ♻️ Pellets se régénèrent automatiquement
+
+---
+
+### 🧪 Démos RL/IA
+
+```powershell
+python demo_rl.py
+```
+
+**Option 1 - Labyrinthe Dynamique (interactif)** :
+- `M` : Changer motif (vague/spirale/aléatoire)
+- `D` : Désactiver mouvements
+- `ESPACE` : Pause
+- `ESC` : Quitter
+
+**Option 2 - Difficulté Adaptative (simulation)** :
+- Observe les ajustements de vitesse/intelligence des fantômes
+- 20 parties simulées avec log détaillé
+
+---
+
+### 🤖 Entraîner un Agent RL
+
+```powershell
+python -m src.rl.trainer --agent pacman --episodes 1000 --steps 1000 --save-dir models --render
+```
+
+**Paramètres** :
+- `--agent pacman|ghost` : Qui entraîner
+- `--render` : Afficher le jeu pendant l'entraînement
+- `--load chemin.pt` : Reprendre un modèle existant
+- `--save-dir` : Dossier de sortie (modèles + logs TensorBoard)
+- `--episodes` / `--steps` : Limites d'entraînement
+
+**Visualiser les métriques** :
+```powershell
+tensorboard --logdir models/pacman/logs
+```
 
 ---
 
@@ -138,91 +182,95 @@ python main.py
 ```
 pac_man/
 │
-├── main.py                 # Point d'entrée de l'application
+├── main.py                 # Point d'entrée principal
+├── demo_rl.py              # Démos labyrinthe dynamique + difficulté adaptative
 ├── requirements.txt        # Dépendances Python
-├── README.md              # Documentation
+├── README.md              # Cette documentation
 │
 └── src/
     ├── __init__.py
-    ├── settings.py        # Configuration globale (constantes, couleurs)
+    ├── settings.py        # Constantes, couleurs, configuration
     ├── menu.py            # Système de menus avec animations
     ├── game.py            # Boucle principale du jeu
     ├── maze.py            # Labyrinthe, pellets, génération
     ├── entities.py        # Pac-Man, Ghosts, entités du jeu
     │
-    └── ai/
-        ├── __init__.py
-        ├── pathfinding.py # Implémentation de l'algorithme A*
-        └── controller.py  # Logique de décision des fantômes
+    ├── ai/
+    │   ├── pathfinding.py # Implémentation A*
+    │   └── controller.py  # Logique décision fantômes
+    │
+    └── rl/
+        ├── adaptive_difficulty.py # Gestionnaire difficulté adaptative
+        ├── dynamic_maze.py        # Labyrinthe avec murs mobiles
+        ├── rl_environment.py      # Environnement Gymnasium
+        ├── rl_agent.py            # Agents DQN (PyTorch)
+        └── trainer.py             # Script d'entraînement + TensorBoard
 ```
 
-### Modules Principaux
+### Modules Clés
 
 #### 🎮 `game.py`
-- Boucle principale du jeu
-- Gestion des événements
-- Détection des collisions
-- Rendu des écrans (victoire/défaite)
+Boucle principale, gestion événements, collisions, rendu victoire/défaite
 
 #### 🗺️ `maze.py`
-- Génération du labyrinthe à partir d'un blueprint
-- Gestion des pellets et power pellets
-- Système de régénération
-- Affichage du terrain
+Génération labyrinthe, gestion pellets, régénération, affichage terrain
 
 #### 👾 `entities.py`
-- Classe `Pacman` : Mouvement, animations, états
-- Classe `Ghost` : 4 fantômes avec comportements distincts
-  - Blinky (Rouge) : Agressif et direct
-  - Pinky (Rose) : Embuscades stratégiques
-  - Inky (Cyan) : Comportement imprévisible
-  - Clyde (Orange) : Timide mais rusé
-- Système d'escape pour fantômes bloqués
+Classes Pacman et Ghost avec animations, états, modes
 
 #### 🤖 `ai/pathfinding.py`
-- Implémentation de l'algorithme A*
-- Heuristique Manhattan
-- Optimisé pour grilles de jeu
-- Cache de chemins pour performance
+**Algorithme A* (Heuristique Manhattan)** : Optimisé pour grilles, cache de chemins pour performance, utilisé par tous les agents
 
 #### 🧠 `ai/controller.py`
-- Gestion des modes de fantômes
-- Calcul des cibles (scatter/chase)
-- Système de décision basé sur la distance
-- Coordination multi-agents
+Gestion modes fantômes, calcul cibles, coordination multi-agents
 
-#### 🎨 `menu.py`
-- Menu principal avec animations
-- Écran d'instructions interactif
-- Effets visuels (gradients, particules)
-- Gestion de la navigation
+#### 💡 `rl/rl_agent.py`
+Agents DQN, réseaux de neurones PyTorch, replay buffer, epsilon-greedy
+
+#### 🎓 `rl/rl_environment.py`
+Environnement Gymnasium, observations, actions, récompenses
+
+#### 📈 `rl/trainer.py`
+Script d'entraînement avec TensorBoard, sauvegarde modèles, évaluation
+
+#### ⚙️ `rl/adaptive_difficulty.py`
+Gestionnaire difficulté, ajustement dynamique basé sur performances
+
+#### 🎨 `rl/dynamic_maze.py`
+Labyrinthe avec murs mobiles, motifs (vague, spirale, aléatoire)
 
 ---
 
 ## 🛠️ Technologies Utilisées
 
-- **Python 3.11.0** : Langage de programmation
-- **Pygame 2.6.1** : Moteur de jeu 2D
-- **Algorithme A*** : Pathfinding intelligent
-- **Architecture MVC** : Séparation des responsabilités
+| Technologie | Version | Usage |
+|-------------|---------|-------|
+| **Python** | 3.11.0 | Langage principal |
+| **Pygame** | 2.6.1 | Moteur graphique 2D |
+| **PyTorch** | 2.x+ | Deep Q-Learning |
+| **Gymnasium** | 0.29.0+ | Environnements RL |
+| **TensorBoard** | 2.15.0+ | Visualisation métriques |
+| **NumPy** | 1.24.0+ | Calculs numériques |
 
 ---
 
 ## 📊 Système de Jeu
 
-### Comportements des Fantômes
+### Comportements Fantômes
 
-1. **Mode Scatter** : Les fantômes patrouillent leurs coins respectifs
-2. **Mode Chase** : Poursuite active de Pac-Man avec stratégies uniques
-3. **Mode Frightened** : Mouvement aléatoire, vulnérables aux attaques
-4. **Mode Eaten** : Retour rapide à la zone de spawn
+1. **Scatter** : Patrouille coins respectifs
+2. **Chase** : Poursuite active de Pac-Man
+3. **Frightened** : Mouvement aléatoire (vulnérable)
+4. **Eaten** : Retour au spawn
 
 ### Système de Score
 
-- Petit pellet : +10 points
-- Power pellet : +50 points
-- Fantôme mangé : +200 points
-- Victoire totale : Bonus supplémentaire
+| Action | Points |
+|--------|--------|
+| Petit pellet | +10 |
+| Power pellet | +50 |
+| Fantôme mangé | +200 |
+| Victoire | Bonus |
 
 ---
 
@@ -231,46 +279,34 @@ pac_man/
 ### Le jeu ne se lance pas
 
 ```powershell
-# Vérifier la version de Python
-python --version
-
-# Réinstaller les dépendances
-pip install --upgrade -r requirements.txt
+python --version  # Vérifier Python 3.10+
+pip install --upgrade -r requirements.txt  # Réinstaller dépendances
 ```
 
-### Erreur d'importation de module
+### Erreur d'importation
 
 ```powershell
-# S'assurer que l'environnement virtuel est activé
-.\.venv\Scripts\Activate.ps1
-
-# Vérifier l'installation de pygame
-pip show pygame
+.\.venv\Scripts\Activate.ps1  # Activer env virtuel
+pip show pygame  # Vérifier installation
 ```
 
 ### Performance lente
 
-- Réduire le nombre de particules dans `menu.py`
-- Vérifier que les pilotes graphiques sont à jour
-- Fermer les applications gourmandes en ressources
+- Réduire particules dans `menu.py`
+- Vérifier drivers graphiques à jour
+- Fermer applications gourmandes
 
 ---
 
 ## 🤝 Contribution
 
-Les contributions sont les bienvenues ! Pour contribuer :
+Les contributions sont bienvenues !
 
 1. Fork le projet
-2. Créez une branche (`git checkout -b feature/AmazingFeature`)
-3. Committez vos changements (`git commit -m 'Add some AmazingFeature'`)
-4. Push vers la branche (`git push origin feature/AmazingFeature`)
-5. Ouvrez une Pull Request
-
----
-
-## 📝 License
-
-Ce projet est sous licence MIT. Voir le fichier `LICENSE` pour plus de détails.
+2. Créez branche : `git checkout -b feature/MaFeature`
+3. Committez : `git commit -m 'Add: MaFeature'`
+4. Push : `git push origin feature/MaFeature`
+5. Ouvrez Pull Request
 
 ---
 
@@ -278,7 +314,9 @@ Ce projet est sous licence MIT. Voir le fichier `LICENSE` pour plus de détails.
 
 **mzmantar**
 
-- GitHub: [@mzmantar](https://github.com/mzmantar)
-- Repository: [Pac-Man---AI-Adventure](https://github.com/mzmantar/Pac-Man---AI-Adventure)
+- GitHub : [@mzmantar](https://github.com/mzmantar)
+- Repository : [Pac-Man---AI-Adventure](https://github.com/mzmantar/Pac-Man---AI-Adventure)
 
 ---
+
+**Dernière mise à jour** : 6 janvier 2026

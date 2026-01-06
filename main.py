@@ -6,7 +6,7 @@ from src.menu import Menu, MenuState
 def main():
     """Main entry point with menu system."""
     pygame.init()
-    screen = pygame.display.set_mode((672, 744))  # SCREEN_WIDTH x SCREEN_HEIGHT
+    screen = pygame.display.set_mode((672, 744))
     pygame.display.set_caption("Pac-Man Deluxe Edition")
     clock = pygame.time.Clock()
     

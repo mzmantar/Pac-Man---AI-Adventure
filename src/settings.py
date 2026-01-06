@@ -36,3 +36,21 @@ GHOST_SPEED = 4.2 * TILE_SIZE / 1.0
 FRIGHTENED_SPEED = 3.2 * TILE_SIZE / 1.0
 POWER_MODE_DURATION = 8  # seconds
 RESPAWN_DELAY = 3  # seconds
+
+# Audio ---------------------------------------------------------------------
+SOUND_ENABLED = True
+SOUND_VOLUME = 0.4
+MUSIC_VOLUME = 0.5
+SOUND_DIR = "assets/sounds"
+SOUND_MUSIC = "pacman_beginning.wav"
+SOUND_PELLET = "pacman_chomp.wav"
+SOUND_POWER = "pacman_eatfruit.wav"
+SOUND_EAT_GHOST = "pacman_eatghost.wav"
+SOUND_DEATH = "pacman_death.wav"
+SOUND_WIN = "pacman_extrapac.wav"
+
+# Base values kept to recalibrate per niveau
+BASE_PACMAN_SPEED = PACMAN_SPEED
+BASE_GHOST_SPEED = GHOST_SPEED
+BASE_FRIGHTENED_SPEED = FRIGHTENED_SPEED
+BASE_POWER_MODE_DURATION = POWER_MODE_DURATION
