@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Iterable, List, Set, Tuple
+from typing import Optional
 
 import pygame
 
 from . import settings
+from .audio import ensure_audio_manager, AudioManager
+from .levels import get_level
 from .entities import Ghost, GhostMode, Pacman, valid_tile
 from .maze import MAZE_BLUEPRINT, Maze
 from .ai.pathfinding import astar_path
@@ -26,14 +29,25 @@ class Game:
     running: bool = True
     font: pygame.font.Font | None = None
     auto_replan: bool = False
+    score_multiplier: float = 1.0
+    level_name: str = ""
+    level_index: int = 0
+    audio: Optional[AudioManager] = None
 
     @classmethod
-    def create(cls) -> "Game":
+    def create(cls, level_index: int = 0) -> "Game":
         pygame.init()
         pygame.font.init()
         screen = pygame.display.set_mode((settings.SCREEN_WIDTH, settings.SCREEN_HEIGHT))
         pygame.display.set_caption(settings.WINDOW_TITLE)
         clock = pygame.time.Clock()
+
+        # Appliquer les paramètres de niveau
+        level = get_level(level_index)
+        level.apply()
+
+        # Audio
+        audio = ensure_audio_manager()
 
         maze = Maze.from_blueprint(MAZE_BLUEPRINT)
         pacman = Pacman(maze, start_pos=(13, 23))
@@ -52,7 +66,14 @@ class Game:
 
         font = pygame.font.SysFont("arialroundedmtbold", 26)
         game = cls(screen, clock, maze, pacman, ghosts, font=font)
+        game.score_multiplier = level.score_multiplier
+        game.level_name = level.name
+        game.level_index = level_index
+        game.auto_replan = level.auto_replan
+        game.audio = audio
         game.pacman.enable_autopilot(False)
+        if game.audio:
+            game.audio.play_music(loop=True)
         return game
 
     def reset_positions(self, lost_life: bool = False) -> None:
@@ -101,6 +122,8 @@ class Game:
             self.draw()
 
         self.show_game_over()
+        if self.audio:
+            self.audio.stop_music()
 
     def handle_events(self) -> None:
         manual_override = False
@@ -149,13 +172,21 @@ class Game:
                 int(self.pacman.grid_pos.x), int(self.pacman.grid_pos.y)
             )
             if tile_value == ".":
-                self.score += 10
+                self.score += int(10 * getattr(self, "score_multiplier", 1.0))
+                if self.audio:
+                    self.audio.play("pellet")
             elif tile_value == "o":
-                self.score += 50
+                self.score += int(50 * getattr(self, "score_multiplier", 1.0))
+                if self.audio:
+                    self.audio.play("power")
                 for ghost in self.ghosts:
                     ghost.set_mode(GhostMode.FRIGHTENED)
             if tile_value in {".", "o"} and self.auto_replan:
                 self.compute_autopilot_path()
+
+            # Tous les pellets mangés -> niveau suivant
+            if not self.maze.remaining_pellets():
+                self.next_level()
 
         self.handle_collisions()
 
@@ -181,11 +212,17 @@ class Game:
                 if ghost.mode == GhostMode.FRIGHTENED:
                     ghost.permanently_eaten = True  # Marquer comme définitivement mangé
                     self.score += 200
+                    if self.audio:
+                        self.audio.play("eat_ghost")
                     # Vérifier si tous les fantômes sont mangés
                     if all(g.permanently_eaten for g in self.ghosts):
+                        if self.audio:
+                            self.audio.play("win")
                         self.show_winner()
                         self.running = False
                 elif ghost.mode != GhostMode.EATEN:
+                    if self.audio:
+                        self.audio.play("death")
                     self.reset_positions(lost_life=True)
         
         # Régénérer les points si tous mangés mais des fantômes restent
@@ -225,8 +262,13 @@ class Game:
             return
         score_text = self.font.render(f"Score: {self.score}", True, settings.WHITE)
         lives_text = self.font.render(f"Vies: {self.lives}", True, settings.AMBER)
+        level_text = None
+        if hasattr(self, "level_name"):
+            level_text = self.font.render(self.level_name, True, settings.SKY_BLUE)
         self.screen.blit(score_text, (16, 8))
         self.screen.blit(lives_text, (settings.SCREEN_WIDTH - lives_text.get_width() - 16, 8))
+        if level_text:
+            self.screen.blit(level_text, (settings.SCREEN_WIDTH // 2 - level_text.get_width() // 2, 8))
 
         indicator = None
         if self.auto_replan:
@@ -252,6 +294,76 @@ class Game:
             for x, value in enumerate(row):
                 if value == " ":
                     self.maze.grid[y][x] = "."
+
+    def next_level(self) -> None:
+        """Passer au niveau suivant en réappliquant les paramètres."""
+        # Incrémenter un attribut de niveau si présent
+        current_level = getattr(self, "level_index", 0)
+        next_level = current_level + 1
+        self.level_index = next_level
+
+        # Appliquer la nouvelle config
+        level = get_level(next_level)
+        level.apply()
+        self.score_multiplier = level.score_multiplier
+        self.level_name = level.name
+        self.auto_replan = level.auto_replan
+
+        # Réinitialiser le plateau
+        self.maze = Maze.from_blueprint(MAZE_BLUEPRINT)
+        self.reset_positions(lost_life=False)
+        self.scatter_timer = 0.0
+
+        # Réinitialiser les fantômes avec la nouvelle maze
+        ghost_starts = [
+            (13, 11),
+            (11, 11),
+            (15, 11),
+            (13, 16),
+        ]
+        corners = [(25, 1), (2, 1), (1, 29), (26, 29)]
+        colours = [
+            settings.GHOST_RED,
+            settings.GHOST_TEAL,
+            settings.GHOST_PINK,
+            settings.GHOST_ORANGE,
+        ]
+
+        self.ghosts = [
+            Ghost(self.maze, name, pos, col, corner)
+            for (pos, col, corner, name) in zip(
+                ghost_starts,
+                colours,
+                corners,
+                ["Blinky", "Inky", "Pinky", "Clyde"],
+            )
+        ]
+
+        # Directions initiales
+        initial_dirs = [
+            pygame.math.Vector2(-1, 0),
+            pygame.math.Vector2(1, 0),
+            pygame.math.Vector2(-1, 0),
+            pygame.math.Vector2(0, 1),
+        ]
+        for ghost, d in zip(self.ghosts, initial_dirs):
+            ghost.direction = d
+
+        # Remettre Pac-Man sur la nouvelle maze
+        self.pacman.maze = self.maze
+        self.pacman.grid_pos = pygame.math.Vector2(13, 23)
+        self.pacman.pixel_pos = pygame.math.Vector2(
+            self.pacman.grid_pos.x * settings.TILE_SIZE + settings.TILE_SIZE / 2,
+            self.pacman.grid_pos.y * settings.TILE_SIZE + settings.TILE_SIZE / 2,
+        )
+        self.pacman.direction = pygame.math.Vector2(0, 0)
+        self.pacman.enable_autopilot(False)
+
+        if self.audio:
+            self.audio.play_music(loop=True)
+
+        # Informer sur le niveau
+        print(f"➡️ Passage à {self.level_name}")
     
     def show_winner(self) -> None:
         """Display winner screen when all ghosts are eaten."""
